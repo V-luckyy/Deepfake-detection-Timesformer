@@ -43,7 +43,7 @@ if __name__ == '__main__':
     #     input_video = args.input
     mode = "infer"
     config_path = "config.yaml"
-    input_video = "data/Celeb-DF-v2/Celeb-real/00001.mp4"
+    input_video = "data/Celeb-DF-V2/id0_id1_00001.mp4"
     # 加载配置文件
     config = load_config(config_path)
     input_dirs = config['data']['input_dirs']
