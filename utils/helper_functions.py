@@ -116,61 +116,6 @@ def augment_video(video_path, output_dir, augment_count=10):
         # print(f"增强视频已保存至: {augmented_video_path}")
 
 
-# def split_and_augment_videos(input_dirs, output_train_dir, output_val_dir, train_ratio=0.8):
-#     """
-#     将视频按 5:1 的比例分成训练集和验证集，确保真假视频样本均衡。
-#     当真实视频数量不够时，调用数据增强函数增加真实视频样本。
-#
-#     input_dirs: 包含视频的文件夹路径字典，例如：
-#                 {'real': 'path_to_Celeb-real', 'synthesis': 'path_to_Celeb-synthesis',
-#                 'youtube_real': 'path_to_YouTube-real'}
-#     output_train_dir: 训练集存放路径
-#     output_val_dir: 验证集存放路径
-#     train_ratio: 训练集与验证集的比例（默认 0.8）
-#     augment_count: 增强视频的数量（默认为 10）
-#     """
-#     # 创建训练集和验证集的目标文件夹
-#     os.makedirs(output_train_dir, exist_ok=True)
-#     os.makedirs(output_val_dir, exist_ok=True)
-#
-#     # 真实和合成的视频路径
-#     real_videos = [os.path.join(input_dirs['real'], f) for f in os.listdir(input_dirs['real']) if f.endswith('.mp4')]
-#     synthesis_videos = [os.path.join(input_dirs['synthesis'], f) for f in os.listdir(input_dirs['synthesis']) if
-#                         f.endswith('.mp4')]
-#     real_videos = real_videos + [os.path.join(input_dirs['youtube_real'], f)
-#                                  for f in os.listdir(input_dirs['youtube_real']) if f.endswith('.mp4')]
-#
-#     # 打乱视频
-#     random.shuffle(real_videos)
-#     random.shuffle(synthesis_videos)
-#
-#     # 真实视频与合成视频比例，确保训练集和验证集均衡
-#     train_real, val_real = train_test_split(real_videos, train_size=train_ratio, random_state=42)
-#     train_synthesis, val_synthesis = train_test_split(synthesis_videos, train_size=train_ratio, random_state=42)
-#
-#     # 将文件复制到目标文件夹
-#     def copy_videos(videos, dest_dir):
-#         for video in videos:
-#             shutil.copy(video, dest_dir)
-#
-#     # 拷贝到训练集和验证集
-#     copy_videos(train_synthesis, output_train_dir)
-#     copy_videos(val_synthesis, output_val_dir)
-#     copy_videos(train_real, output_train_dir)
-#     copy_videos(val_real, output_val_dir)
-#
-#     # 当真实视频样本数不足时，进行数据增强
-#     if len(train_real) < len(train_synthesis):
-#         print(f"训练集中的真实视频不足，正在进行数据增强...")
-#         augment_count = (len(train_synthesis) - len(train_real)) // len(train_real)
-#         augment_video_list(train_real, output_train_dir, augment_count)
-#         augment_video_list(val_real, output_val_dir, augment_count)
-#     else:
-#         copy_videos(train_real, output_train_dir)
-#         copy_videos(val_real, output_val_dir)
-#
-#     print(f"训练集和验证集已分配到 {output_train_dir} 和 {output_val_dir}，分别包含真实和合成的视频。")
-
 def split_data(src_dir, train_dir, val_dir, train_ratio=0.8):
     """
     划分数据集到训练集和验证集，保持真实和合成数据的比例平衡。
