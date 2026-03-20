@@ -1,0 +1,7 @@
+# 虚拟人脸识别 - 依赖
+torch>=2.0
+torchvision>=0.15
+opencv-python>=4.5
+PyYAML>=6.0
+scikit-learn>=1.0
+matplotlib>=3.5

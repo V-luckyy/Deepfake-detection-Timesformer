@@ -93,8 +93,11 @@ class SelfAttention(nn.Module):
 
         # Compute Q, K, V
         qkv = self.qkv(x)  # (batch_size, seq_len, 3 * d_model)
-        qkv = qkv.reshape(batch_size, seq_len, 3, self.num_heads, self.head_dim)
-        q, k, v = qkv.permute(2, 0, 3, 1, 4)  # Each of (batch_size, num_heads, seq_len, head_dim)
+        q, k, v = qkv.chunk(3, dim=-1)
+        
+        q = q.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        k = k.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        v = v.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
         # Scaled dot-product attention
         scores = torch.einsum("bhqd, bhkd -> bhqk", q, k) / math.sqrt(self.head_dim)

@@ -1,7 +1,11 @@
 # train.py
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import torch.optim as optim
-from torch.amp import autocast
+from torch.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from models.model import VideoTransformer
 from util.data_loader import create_data_loader
@@ -10,12 +14,12 @@ from util.helper_functions import plot_training_progress
 import os
 
 
-def train(config):
+def train(config, progress_callback=None):
     # 设置设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # 创建训练集数据加载器
+    num_workers = config.get('training', {}).get('num_workers', 0)
     train_loader = create_data_loader(
         video_dir=config['data']['train_dir'],
         labels=config['data']['train_labels'],
@@ -23,10 +27,10 @@ def train(config):
         subset_ratio=config['training']['subset_ratio'],
         num_frames=config['data']['num_frames'],
         frame_size=config['data']['frame_size'],
-        shuffle=True  # 训练集需要打乱数据
+        shuffle=True,
+        num_workers=num_workers,
     )
 
-    # 创建验证集数据加载器
     val_loader = create_data_loader(
         video_dir=config['data']['val_dir'],
         labels=config['data']['val_labels'],
@@ -34,7 +38,8 @@ def train(config):
         subset_ratio=config['evaluation']['subset_ratio'],
         num_frames=config['data']['num_frames'],
         frame_size=config['data']['frame_size'],
-        shuffle=False  # 验证集通常不打乱
+        shuffle=False,
+        num_workers=num_workers,
     )
 
     # 初始化模型并移动到设备
@@ -57,6 +62,8 @@ def train(config):
     # 初始化记录指标的列表
     train_losses, train_accuracies = [], []
     val_losses, val_accuracies = [], []
+    last_checkpoint_saved = None
+    scaler = GradScaler('cuda' if device.type == 'cuda' else 'cpu')
 
     # 训练循环
     num_epochs = config['training']['epochs']
@@ -71,15 +78,25 @@ def train(config):
             inputs = batch['video'].to(device)
             labels = batch['label'].to(device)
 
-            # 前向传播
-            with autocast(device_type="cuda"):
+            # 前向传播（仅 GPU 时使用混合精度）
+            device_type = "cuda" if device.type == "cuda" else "cpu"
+            if device_type == "cuda":
+                with autocast(device_type=device_type):
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
+
+                # 反向传播和优化
+                optimizer.zero_grad()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
-
-            # 反向传播和优化
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
             # 记录损失
             total_loss += loss.item()
@@ -106,11 +123,37 @@ def train(config):
         scheduler.step(val_metrics['loss'])
 
         # 保存模型检查点
+        last_checkpoint = None
         if (epoch+1) % config['training']['checkpoint_interval'] == 0:
             if not os.path.exists(config['model']['save_dir']):
                 os.makedirs(config['model']['save_dir'])
             checkpoint_path = os.path.join(config['model']['save_dir'], f"epoch_{epoch+1}.pth")
             torch.save(model.state_dict(), checkpoint_path)
+            last_checkpoint = checkpoint_path
+            last_checkpoint_saved = checkpoint_path
             print(f"Model checkpoint saved at {checkpoint_path}")
+
+        # GUI 进度回调
+        if progress_callback:
+            progress_callback(
+                epoch=epoch + 1,
+                total_epochs=num_epochs,
+                train_loss=epoch_loss,
+                train_acc=accuracy,
+                val_loss=val_metrics['loss'],
+                val_acc=val_metrics['accuracy'],
+                last_checkpoint=last_checkpoint,
+                save_dir=config['model']['save_dir'],
+            )
     # 绘制训练和验证过程的图表
     plot_training_progress(train_losses, train_accuracies, val_losses, val_accuracies)
+
+    return {
+        'train_losses': train_losses,
+        'train_accuracies': train_accuracies,
+        'val_losses': val_losses,
+        'val_accuracies': val_accuracies,
+        'final_val_acc': val_accuracies[-1] if val_accuracies else 0,
+        'save_dir': config['model']['save_dir'],
+        'last_checkpoint': last_checkpoint_saved,
+    }

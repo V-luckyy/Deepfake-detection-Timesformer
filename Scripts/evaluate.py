@@ -1,9 +1,14 @@
 # scripts/evaluate.py
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 from models.model import VideoTransformer
 from util.data_loader import create_data_loader
 from util.metrics import calculate_metrics
 import os
+
 
 def evaluate(config):
     # 设置设备
@@ -12,18 +17,20 @@ def evaluate(config):
 
     # 加载验证数据集
     val_loader = create_data_loader(
-        video_dir=config['data']['val_dir'],           # 验证数据文件夹路径
-        labels=config['data']['val_labels'],           # 验证数据标签文件路径或映射
-        batch_size=config['evaluation']['batch_size'], # 批次大小
-        num_frames=config['data']['num_frames'],       # 每个视频的帧数
-        frame_size=config['data']['frame_size'],       # 视频帧的大小 (height, width)
-        shuffle=False                                  # 不打乱验证数据集
+        video_dir=config['data']['val_dir'],
+        labels=config['data']['val_labels'],
+        batch_size=config['evaluation']['batch_size'],
+        subset_ratio=config['evaluation'].get('subset_ratio', 1.0),
+        num_frames=config['data']['num_frames'],
+        frame_size=config['data']['frame_size'],
+        shuffle=False
     )
 
     # 初始化并加载模型
     model = VideoTransformer(
         num_frames=config['model']['num_frames'],
         num_patches=config['model']['num_patches'],
+        frame_size=config['data']['frame_size'],
         d_model=config['model']['d_model'],
         num_heads=config['model']['num_heads'],
         num_layers=config['model']['num_layers'],

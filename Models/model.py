@@ -8,25 +8,24 @@ class TransformerEncoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, num_patches, dim_feedforward=2048, dropout=0.4):
         super(TransformerEncoderLayer, self).__init__()
         self.spatial_temporal_attn = SpatialTemporalAttention(d_model, num_heads, num_patches)
-        self.layernorm1 = nn.LayerNorm(d_model)
+        self.layernorm2 = nn.LayerNorm(d_model) # Rename to layernorm2 to indicate it's for FFN
         self.ffn = nn.Sequential(
             nn.Linear(d_model, dim_feedforward),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(dim_feedforward, d_model)
         )
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src):
-        # Spatial-temporal attention block
-        # src shape: (batch_size, seq_len, d_model)
-        attn_output = self.spatial_temporal_attn(src)
-        src = src + self.dropout(attn_output)
-        src = self.layernorm1(src)
+        # Spatial-temporal attention block 
+        # (It already applies its own Post-LN and residuals internally)
+        x = self.spatial_temporal_attn(src)
 
-        # Feed-forward block
-        ffn_output = self.ffn(src)
-        src = src + self.dropout(ffn_output)
-        return src
+        # Feed-forward block requires a residual and its own layernorm (Post-LN)
+        ffn_output = self.ffn(x)
+        x = self.layernorm2(x + self.dropout(ffn_output))
+        return x
 
 
 class VideoTransformer(nn.Module):
@@ -44,18 +43,20 @@ class VideoTransformer(nn.Module):
             nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
             )
         self.embedded_hw = ((((((frame_size-5)//3+1)//2)-3)//2+1)//2)**2
-        self.positional_encoding = PositionalEncoding3D(d_model, num_frames, self.embedded_hw, num_patches)
+        
+        # 修复 Bug: 确保位置编码生成的 Token 数严格与 CNN 缩放完后的尺寸 self.embedded_hw 一致
+        self.positional_encoding = PositionalEncoding3D(d_model, num_frames, self.embedded_hw, self.embedded_hw)
 
-        # Stack multiple Transformer encoder layers
+        # Stack multiple Transformer encoder layers (使用 embedded_hw 作为实际空间 token 数)
         self.encoder_layers = nn.ModuleList([
-            TransformerEncoderLayer(d_model, num_heads, num_patches, dim_feedforward)
+            TransformerEncoderLayer(d_model, num_heads, self.embedded_hw, dim_feedforward)
             for _ in range(num_layers)
         ])
 
         # Classification head
         self.classifier = nn.Sequential(
             nn.LayerNorm(d_model),
-            nn.Linear(d_model, num_classes)
+            nn.Linear(d_model, num_classes),
         )
 
     def forward(self, x):
